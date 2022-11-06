@@ -32,13 +32,20 @@ int main(int argc, char **argv)
 
   // 듣기 식별자 할당
   listenfd = Open_listenfd(argv[1]);
+  // printf("argv[1]: %d\n", listenfd);
+
+  pid_t ppid;
+  ppid = getpid();
+  printf ("PID %d caught signal.\n", ppid);
 
   while (1) {
-    
+    // printf("while문 한바퀴.\n");
     clientlen = sizeof(clientaddr);
+    // printf("clientlen: %d\n", clientlen);
     // 연결 식별자 생성, 할당
     connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);  // line:netp:tiny:accept
     Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
+    printf("<------------start of request------------->\n");
     printf("Accepted connection from (%s, %s)\n", hostname, port);
     doit(connfd);   // line:netp:tiny:doit
     Close(connfd);  // line:netp:tiny:close
@@ -67,6 +74,8 @@ void doit(int fd)
   printf("%s", buf);
   // request line에서 method, uri, version 값을 split해서 받는다.
   sscanf(buf, "%s %s %s", method, uri, version);
+  // printf("%s %s %s\n", method, uri, version);
+  printf("filename : %s\n", filename);
 
   // string case compare 함수: 대소문자를 구분하지 않고 두 string의 철자와 길이를 비교한다. 
   // 두 string이 같으면 0을 리턴하고 / 1번 스트링이 더 짧으면 음수 리턴 /2번 스트링이 더 짧으면 양수 리턴.
@@ -85,11 +94,13 @@ void doit(int fd)
   /* Parse URI from GET request */
   // 정적 컨텐츠인지 아닌지 검사한다.
   is_static = parse_uri(uri, filename, cgiargs);
+  printf("%d\n", is_static);
+  printf("%d\n", stat(filename, &sbuf));
 
   // stat -> gets status information about a specified file, places it in the area of memory pointed to by the buf argument.
   // returns 0 if successful and -1 if not.
   if (stat(filename, &sbuf) < 0) {
-    clienterror(fd, filename, "404", "Not found", "Tiny couldn’t find this file");
+    clienterror(fd, filename, "404", "Not found", "Tiny couldn't find this file");
     return;
   }
 
@@ -97,8 +108,8 @@ void doit(int fd)
    /* Serve static content */
   //  정적 콘텐츠라면
   if (is_static) {
-    if (!((sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) {
-      clienterror(fd, filename, "403", "Forbidden", "Tiny couldn’t read the file");
+    if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) {
+      clienterror(fd, filename, "403", "Forbidden", "Tiny couldn't read the file");
       return;
     }
     serve_static(fd, filename, sbuf.st_size);
@@ -106,8 +117,9 @@ void doit(int fd)
   /* Serve dynamic content */
   // 동적 콘텐츠라면
   else{
+    printf("이 컨텐츠는 동적 컨텐츠 입니다.\n");
     if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) {
-      clienterror(fd, filename, "403", "Forbidden", "Tiny couldn’t run the CGI program");
+      clienterror(fd, filename, "403", "Forbidden", "Tiny couldn't run the CGI program");
       return;
     }
     serve_dynamic(fd, filename, cgiargs);
@@ -164,11 +176,13 @@ int parse_uri(char *uri, char *filename, char *cgiargs)
   // strstr 함수: string1에서 string2의 첫 번째 표시를 찾는다.
   // uri 변수에서 "cgi-bin"을 찾지 못한 경우,
   // 정적컨텐츠인 경우이다.
+  printf("%s\n", uri);
   if (!strstr(uri, "cgi-bin")) {
     // strcpy 함수: string2를 string1에서 지정한 위치로 복사한다.
     strcpy(cgiargs, "");
     strcpy(filename, ".");
     // strcat 함수: string2를 string1에 연결하고 널 문자로 결과 스트링을 종료.
+    // filename -> ./
     strcat(filename, uri);
 
     // 최소한의 URL을 갖은 경우 -> 특정 기본 홈페이지("home.html")로 확장한다.
@@ -178,6 +192,18 @@ int parse_uri(char *uri, char *filename, char *cgiargs)
 
     return 1;
   }
+  // 정적 컨텐츠가 아닌 경우 
+  else{
+    strcpy(cgiargs, "");
+    strcpy(filename, ".");
+    strcat(filename, uri);
+
+    return 0;
+  }
+
+  
+ 
+
 }
 
 // 정적 콘텐츠를 serve.
@@ -185,6 +211,7 @@ void serve_static(int fd, char *filename, int filesize)
 {
   int srcfd;
   char *srcp, filetype[MAXLINE], buf[MAXBUF];
+
 
   /* Send response headers to client */
   get_filetype(filename, filetype);
@@ -241,6 +268,11 @@ void get_filetype(char *filename, char *filetype)
   }
 }
 
+void sigcatcher()
+{
+		printf ("PID %d caught signal.\n", getpid());
+}
+
 void serve_dynamic(int fd, char *filename, char *cgiargs)
 {
   char buf[MAXLINE], *emptylist[] = { NULL };
@@ -251,12 +283,29 @@ void serve_dynamic(int fd, char *filename, char *cgiargs)
   sprintf(buf, "Server: Tiny Web Server\r\n");
   Rio_writen(fd, buf, strlen(buf));
 
+  pid_t ppid;
+  // signal (SIGINT, sigcatcher);
+
   if (Fork() == 0) { /* Child */
+
+    ppid = getpid();
+    printf ("PID %d caught signal.\n", ppid);
+    
+
     /* Real server would set all CGI vars here */
     setenv("QUERY_STRING", cgiargs, 1);
     Dup2(fd, STDOUT_FILENO); /* Redirect stdout to client */
+    printf ("파일 실행시도\n");
     Execve(filename, emptylist, environ); /* Run CGI program */
   }
+
+  // while(1){
+  //   if (kill(ppid, SIGINT) == -1){
+  //     exit(1);
+  //   }
+  // }
   Wait(NULL); /* Parent waits for and reaps child */
 }
+
+
  

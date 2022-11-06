@@ -994,7 +994,7 @@ int open_clientfd(char *hostname, char *port) {
  *       -1 with errno set for other errors.
  */
 /* $begin open_listenfd */
-int open_listenfd(char *port) 
+int open_listenfd(char *port)
 {
     struct addrinfo hints, *listp, *p;
     int listenfd, rc, optval=1;
