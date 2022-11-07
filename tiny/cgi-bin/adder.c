@@ -7,19 +7,21 @@
 int main(void) {
   char *buf, *p;
   char arg1[MAXLINE], arg2[MAXLINE], content[MAXLINE];
-  int n1=0, n2=0;
+  int n1 = 0;
+  int n2 = 0;
 
   /* Extract the two arguments */
   if ((buf = getenv("QUERY_STRING")) != NULL) {
     p = strchr(buf, '&');
-    *p = '\0';
-    strcpy(arg1, buf);
-    strcpy(arg2, p+1);
+    sscanf(buf, "a=%s", arg1);
+    sscanf(p+1, "b=%s", arg2);
     n1 = atoi(arg1);
     n2 = atoi(arg2);
-
+  
+    // printf("출력 %s %s", n1, n2);/
   }
 
+  
   /* Make the response body */
   sprintf(content, "QUERY_STRING=%s", buf);
   sprintf(content, "Welcome to add.com: ");
@@ -28,12 +30,20 @@ int main(void) {
   sprintf(content, "%sThanks for visiting!\r\n", content);
 
   /* Generate the HTTP response */
+  // 얘가 헤더(response body의 정보는 가지고 있어야 함.)
   printf("Connection: close\r\n");
   printf("Content-length: %d\r\n", (int)strlen(content));
   printf("Content-type: text/html\r\n\r\n");
+
+  if (!strcasecmp("HEAD", getenv("REQUEST_METHOD"))){
+    return;
+  }
+
   printf("%s", content);
   fflush(stdout);
 
   exit(0);
 }
+
+
 /* $end adder */
