@@ -235,7 +235,6 @@ void serve_static(int fd, char *filename, int filesize, char *method)
 
 
   /* Send response body to client */
-
   // filename을 open할 수 있는지 확인.
   srcfd = Open(filename, O_RDONLY, 0);
 
