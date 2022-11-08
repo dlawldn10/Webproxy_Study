@@ -70,8 +70,6 @@ void doit(int fd)
   printf("%s", buf);
   // request line에서 method, uri, version 값을 split해서 받는다.
   sscanf(buf, "%s %s %s", method, uri, version);
-  // printf("%s %s %s\n", method, uri, version);
-  // printf("filename : %s\n", filename);
 
   // string case compare 함수: 대소문자를 구분하지 않고 두 string의 철자와 길이를 비교한다. 
   // 두 string이 같으면 0을 리턴하고 / 1번 스트링이 더 짧으면 음수 리턴 /2번 스트링이 더 짧으면 양수 리턴.
@@ -90,8 +88,7 @@ void doit(int fd)
   /* Parse URI from GET request */
   // 정적 컨텐츠인지 아닌지 검사한다.
   is_static = parse_uri(uri, filename, cgiargs);
-  // printf("%d\n", is_static);
-  // printf("%d\n", stat(filename, &sbuf));
+  
 
   // stat -> gets status information about a specified file, places it in the area of memory pointed to by the buf argument.
   // returns 0 if successful and -1 if not.
@@ -108,7 +105,9 @@ void doit(int fd)
       clienterror(fd, filename, "403", "Forbidden", "Tiny couldn't read the file");
       return;
     }
+    // printf("%s", filename);
     serve_static(fd, filename, sbuf.st_size, method);
+    
   }
   /* Serve dynamic content */
   // 동적 콘텐츠라면
@@ -233,7 +232,6 @@ void serve_static(int fd, char *filename, int filesize, char *method)
     return;
   }
 
-
   /* Send response body to client */
   // filename을 open할 수 있는지 확인.
   srcfd = Open(filename, O_RDONLY, 0);
@@ -296,6 +294,9 @@ void get_filetype(char *filename, char *filetype)
   else if (strstr(filename, ".jpg")) {
     strcpy(filetype, "image/jpeg");
   }
+  else if (strstr(filename, ".mp4")) {
+    strcpy(filetype, "video/mp4");
+  }
   else {
     strcpy(filetype, "text/plain");
   }
@@ -326,4 +327,3 @@ void serve_dynamic(int fd, char *filename, char *cgiargs, char *method)
 }
 
 
- 
