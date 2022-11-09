@@ -20,9 +20,11 @@ int send_request(char *uri, char *port, int fd);
 void *thread(void *vargp);
 
 char dest[MAXLINE];
+// char port[MAXLINE];
 
 int main(int argc, char **argv) 
 {
+  // 듣기 식별자, 연결 식별자 선언
   int listenfd, *connfdp;
   char hostname[MAXLINE], port[MAXLINE];
   socklen_t clientlen;
@@ -44,16 +46,58 @@ int main(int argc, char **argv)
     // connfd 번호가 나온다.
     *connfdp = Accept(listenfd, (SA *)&clientaddr, &clientlen);
     Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
+    printf("<------------proxy server request------------->\n");
     printf("Accepted connection from (%s, %s)\n", hostname, port);
     // peer thread 만들기
     // Pthread_create 에서 thread 호출해서 connfd를 연결한 peer thread생성
     Pthread_create(&tid, NULL, thread, connfdp);
-
-    // doit(connfd);
-    // Close(connfd);
+    
   }
 
 }
+
+void *thread(void *vargp)
+{
+  int connfd = *((int *)vargp);
+  Pthread_detach(pthread_self());
+  Free(vargp);
+  // echo(connfd);
+  doit(connfd);
+  Close(connfd);
+
+  return NULL;
+}
+
+int send_request(char *uri, char *port, int fd){
+
+  int clientfd;
+  char buf[MAXLINE], proxy_res[MAX_OBJECT_SIZE];
+  rio_t rio;
+  clientfd = Open_clientfd(dest, port);
+  // printf("%d\n", clientfd);
+
+  Rio_readinitb(&rio, clientfd);
+  sprintf(buf, "GET %s HTTP/1.0\r\n", uri);
+  sprintf(buf, "%sConnection: keep-alive\r\n", buf);
+  sprintf(buf, "%sCache-Control: max-age=0\r\n", buf);
+  sprintf(buf, "%sUpgrade-Insecure-Requests: 1\r\n", buf);
+  sprintf(buf, "%sUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36\r\n", buf);
+  sprintf(buf, "%sAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9", buf);
+  sprintf(buf, "%sAccept-Encoding: gzip, deflate\r\n", buf);
+  sprintf(buf, "%sAccept-Language: ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7\r\n\r\n", buf);
+
+  Rio_writen(clientfd, buf, strlen(buf));
+  // printf("---------------------------------------\n");
+  printf("%s", buf);
+  Rio_readnb(&rio, proxy_res, MAX_OBJECT_SIZE);
+  // printf("%s", proxy_res);
+
+  Rio_writen(fd, proxy_res, MAX_OBJECT_SIZE);
+  Close(clientfd);
+  // exit(0);
+
+}
+
 
 void doit(int fd)
 {
@@ -88,50 +132,7 @@ void doit(int fd)
     
   }
 
+
   send_request(new_uri, port, fd);
-
-}
-
-
-int send_request(char *uri, char *port, int fd){
-
-  int clientfd;
-  char buf[MAXLINE], proxy_res[MAX_OBJECT_SIZE];
-  rio_t rio;
-  clientfd = Open_clientfd(dest, port);
-
-  Rio_readinitb(&rio, clientfd);
-  sprintf(buf, "GET %s HTTP/1.0\r\n", uri);
-  sprintf(buf, "%sConnection: keep-alive\r\n", buf);
-  sprintf(buf, "%sCache-Control: max-age=0\r\n", buf);
-  sprintf(buf, "%sUpgrade-Insecure-Requests: 1\r\n", buf);
-  sprintf(buf, "%sUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36\r\n", buf);
-  sprintf(buf, "%sAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9", buf);
-  sprintf(buf, "%sAccept-Encoding: gzip, deflate\r\n", buf);
-  sprintf(buf, "%sAccept-Language: ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7\r\n\r\n", buf);
-
-  Rio_writen(clientfd, buf, strlen(buf));
-  printf("%s", buf);
-  Rio_readnb(&rio, proxy_res, MAX_OBJECT_SIZE);
-
-  Rio_writen(fd, proxy_res, MAX_OBJECT_SIZE);
-
-
-  Close(clientfd);
-
-}
-
-
-/* Thread routine */
-void *thread(void *vargp)
-{
-  int connfd = *((int *)vargp);
-  Pthread_detach(pthread_self());
-  Free(vargp);
-  // echo(connfd);
-  doit(connfd);
-  Close(connfd);
-
-  return NULL;
 }
 
