@@ -23,11 +23,13 @@ static const char *user_agent_hdr =
 void doit(int fd);
 void send_request(char *uri, int fd);
 void *thread(void *vargp);
-
 char dest[MAXLINE];
+
+// 요청들을 저장할 큐 선언.
 Queue queue;
+
+// 세마포어 변수 선언
 sbuf_t sbuf;
-// sbuf_t *s;
 sem_t mutex;
 
 
@@ -40,11 +42,11 @@ int main(int argc, char **argv)
   pthread_t tid;
 
   
-  
-  InitQueue(&queue);//큐 초기화
-  // s->buf = Calloc(1, sizeof(int));
-  // Sem_init(&s->mutex, 0, 1); // 세마포어 초기화
+  // 요청을 저장하는 큐 초기화
+  InitQueue(&queue);
+  // 세마포어 초기화
   sem_init(&mutex,0,1);
+  sbuf_init(&sbuf, SBUFSIZE);
 
   /* Check command line args */
   if (argc != 2) {
@@ -52,48 +54,45 @@ int main(int argc, char **argv)
     exit(1);
   }
 
+  // 요청을 기다린다.
   listenfd = Open_listenfd(argv[1]);
-
-  sbuf_init(&sbuf, SBUFSIZE);
+  
+  // 스레드 풀을 생성.
+  // NTHREADS 개의 스레드를 미리 생성해준다.
   int i = 0;
   for (i = 0; i < NTHREADS; i++) /* Create worker threads */
   {
     Pthread_create(&tid, NULL, thread, NULL);
   }
 
+  // 요청을 받으면 미리 만들어놨던 스레드에게 요청 전달
   while (1) {
     clientlen = sizeof(clientaddr);
-    // connfdp = Malloc(sizeof(int));
     connfdp = Accept(listenfd, (SA *)&clientaddr, &clientlen);
-    // Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
-    
-    // printf("Accepted connection from (%s, %s)\n", hostname, port);
     sbuf_insert(&sbuf, connfdp); /* Insert connfd in buffer */
-    
   }
 
 }
 
+// 스레드 생성
 void *thread(void *vargp)
 {
-
-  // int connfd = *((int *)vargp);
   Pthread_detach(pthread_self());
-  // Free(vargp);
   while (1) {
     /* Remove connfd from buffer */
     int connfd = sbuf_remove(&sbuf);
     printf("<-----------------start of proxy server request------------------>\n");
     /* Service client */
-    // echo_cnt(connfd);
+    // 해당 스레드에서 요청 받은 작업을 수행한다.
     doit(connfd);
     Close(connfd);
   }
   
-  printf("<-----------------end of entire request------------------>\n");
+  printf("<-----------------end of request------------------>\n");
   return NULL;
 }
 
+// proxy 서버로 요청을 전달한다.
 void send_request(char *uri, int fd){
 
   int clientfd;
@@ -101,58 +100,70 @@ void send_request(char *uri, int fd){
   rio_t rio;
   char *p, *q;
 
-  // uri 파싱
+  // uri 파싱 진행.
+  // ex) http://143.248.225.88:5000/home.html
   sscanf(strstr(uri, "http://"), "http://%s", tmp);
+  // tmp = 143.248.225.88:5000/home.html
   if((p = strchr(tmp, ':')) != NULL){
     *p = '\0';
+    // dest = 143.248.225.88
+    // tmp2 = 5000/home.html
     sscanf(tmp, "%s", dest);
     sscanf(p+1, "%s", tmp2);
 
     q = strchr(tmp2, '/');
     *q = '\0';
+    // 5000  home.html
     sscanf(tmp2, "%s", port);
+    // port = 5000
+    
     *q = '/';
     sscanf(q, "%s", new_uri);
+    // new_uri = /home.html
     
   }
 
-  // proxy - tiny
+  // proxy <-> tiny connection
   clientfd = Open_clientfd(dest, port);
 
-  // request header
+  // request header를 만들고
   Rio_readinitb(&rio, clientfd);
   sprintf(buf, "GET %s HTTP/1.0\r\n\r\n", new_uri);
-  // sprintf(buf, "%sConnection: keep-alive\r\n", buf);
-  // sprintf(buf, "%sCache-Control: max-age=0\r\n", buf);
-  // sprintf(buf, "%sUpgrade-Insecure-Requests: 1\r\n", buf);
-  // sprintf(buf, "%sUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36\r\n", buf);
-  // sprintf(buf, "%sAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9", buf);
-  // sprintf(buf, "%sAccept-Encoding: gzip, deflate\r\n", buf);
-  // sprintf(buf, "%sAccept-Language: ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7\r\n\r\n", buf);
 
+  // 만든 헤더를 proxy <-> tiny 연결 버퍼에 넣어준다.
   Rio_writen(clientfd, buf, strlen(buf));
   printf("%s", buf);
+
+  // tiny 서버에서 들어온 response를 읽어준다.
   Rio_readnb(&rio, proxy_res, MAX_OBJECT_SIZE);
 
+  // response를 telnet <-> proxy 연결 버퍼에 전달한다.
   Rio_writen(fd, proxy_res, MAX_OBJECT_SIZE);
+
+  // proxy <-> tiny 연결을 끊어준다.
   Close(clientfd);
 
+
+  // 큐를 안전하게 이용하기 위한 세마포어.
   P(&mutex);
+  // 큐에 노드가 9개 이상 들어있다면 enqueue를 해주기 전에 dequeue를 해준다.
   if (queue.count > 10){
     Dequeue(&queue);
     printf("------------------dequeue %d\n", queue.count);
   }
 
-  printf("%s\n", (proxy_res));
+  // printf("%s\n", (proxy_res));
+
+  // queue에 요청을 저장해준다.
   Enqueue(&queue, uri, &proxy_res);
+  // 큐를 모두 이용했으므로 잠금을 풀어준다.
   V(&mutex);
+
   printf("----------------enqueue %d\n", queue.count);
   
-
-
 }
 
-// fd : telnet - proxy
+// fd: telnet <-> proxy
 void doit(int fd)
 {
   int is_static;
@@ -170,23 +181,26 @@ void doit(int fd)
   printf("%s", buf);
   sscanf(buf, "%s %s %s", method, uri, version);
 
-  
+  // 큐 조회 전 잠금 설정
   P(&mutex);
+  // 큐의 앞에서 부터 옆 노드로 가면서
   Node *cache = queue.front;
   while (cache != NULL){
-    
+    // 새로 받은 요청과 같은 uri가 큐에 있다면
     if(strcmp(cache->request_line, uri) == 0){
       printf("--------------------cache hit!!\n");
-      // printf("%s\n", (cache->response));
-      printf("before %s\n", (cache->request_line));
       Rio_writen(fd, cache->response, strlen(cache->response));
-      printf("after %s\n", (cache->request_line));
-      // printf("111111111111111111\n");
+      // tiny 서버로 요청을 보내지 않고 바로 return한다.
       return;
     }
     cache = cache->next;
   }
+  // 큐 조회 후 잠금 풀기.
   V(&mutex);
 
+  // 이전에 받은 적 없는 요청을 받았으므로
+  // tiny 서버로 요청을 보낸다.
   send_request(&uri, fd);
+
+
 }
