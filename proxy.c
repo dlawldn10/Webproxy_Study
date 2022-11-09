@@ -3,6 +3,10 @@
 
 #include <stdio.h>
 #include "queue.c"
+#include "sbuf.h"
+// #include "sbuf.c"
+#define NTHREADS 4
+#define SBUFSIZE 16
 
 /* Recommended max cache and object sizes */
 #define MAX_CACHE_SIZE 1049000
@@ -22,6 +26,7 @@ void *thread(void *vargp);
 
 char dest[MAXLINE];
 Queue queue;
+sbuf_t sbuf;
 
 
 int main(int argc, char **argv) 
@@ -42,14 +47,21 @@ int main(int argc, char **argv)
 
   listenfd = Open_listenfd(argv[1]);
 
+  sbuf_init(&sbuf, SBUFSIZE);
+  int i = 0;
+  for (i = 0; i < NTHREADS; i++) /* Create worker threads */
+  {
+    Pthread_create(&tid, NULL, thread, NULL);
+  }
+
   while (1) {
     clientlen = sizeof(clientaddr);
-    connfdp = Malloc(sizeof(int));
-    *connfdp = Accept(listenfd, (SA *)&clientaddr, &clientlen);
-    Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
-    printf("<-----------------start of proxy server request------------------>\n");
-    printf("Accepted connection from (%s, %s)\n", hostname, port);
-    Pthread_create(&tid, NULL, thread, connfdp);
+    // connfdp = Malloc(sizeof(int));
+    connfdp = Accept(listenfd, (SA *)&clientaddr, &clientlen);
+    // Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
+    
+    // printf("Accepted connection from (%s, %s)\n", hostname, port);
+    sbuf_insert(&sbuf, connfdp); /* Insert connfd in buffer */
     
   }
 
@@ -57,11 +69,20 @@ int main(int argc, char **argv)
 
 void *thread(void *vargp)
 {
-  int connfd = *((int *)vargp);
+
+  // int connfd = *((int *)vargp);
   Pthread_detach(pthread_self());
-  Free(vargp);
-  doit(connfd);
-  Close(connfd);
+  // Free(vargp);
+  while (1) {
+    /* Remove connfd from buffer */
+    int connfd = sbuf_remove(&sbuf);
+    printf("<-----------------start of proxy server request------------------>\n");
+    /* Service client */
+    // echo_cnt(connfd);
+    doit(connfd);
+    Close(connfd);
+  }
+  
   printf("<-----------------end of entire request------------------>\n");
   return NULL;
 }
