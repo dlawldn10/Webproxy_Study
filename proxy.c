@@ -27,6 +27,8 @@ void *thread(void *vargp);
 char dest[MAXLINE];
 Queue queue;
 sbuf_t sbuf;
+// sbuf_t *s;
+sem_t mutex;
 
 
 int main(int argc, char **argv) 
@@ -36,8 +38,13 @@ int main(int argc, char **argv)
   socklen_t clientlen;
   struct sockaddr_storage clientaddr;
   pthread_t tid;
+
+  
   
   InitQueue(&queue);//큐 초기화
+  // s->buf = Calloc(1, sizeof(int));
+  // Sem_init(&s->mutex, 0, 1); // 세마포어 초기화
+  sem_init(&mutex,0,1);
 
   /* Check command line args */
   if (argc != 2) {
@@ -130,7 +137,7 @@ void send_request(char *uri, int fd){
   Rio_writen(fd, proxy_res, MAX_OBJECT_SIZE);
   Close(clientfd);
 
-
+  P(&mutex);
   if (queue.count > 10){
     Dequeue(&queue);
     printf("------------------dequeue %d\n", queue.count);
@@ -138,6 +145,7 @@ void send_request(char *uri, int fd){
 
   printf("%s\n", (proxy_res));
   Enqueue(&queue, uri, &proxy_res);
+  V(&mutex);
   printf("----------------enqueue %d\n", queue.count);
   
 
@@ -163,7 +171,7 @@ void doit(int fd)
   sscanf(buf, "%s %s %s", method, uri, version);
 
   
-
+  P(&mutex);
   Node *cache = queue.front;
   while (cache != NULL){
     
@@ -178,6 +186,7 @@ void doit(int fd)
     }
     cache = cache->next;
   }
-  
+  V(&mutex);
+
   send_request(&uri, fd);
 }
