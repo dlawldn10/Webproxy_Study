@@ -124,10 +124,10 @@ void send_request(char *uri, int fd){
     Dequeue(&queue);
     printf("------------------dequeue %d\n", queue.count);
   }
-  printf("%s\n", uri);
-  printf("%s\n", proxy_res);
+  // printf("%s\n", uri);
+  // printf("%s\n", proxy_res);
 
-  Enqueue(&queue, &uri, &proxy_res);
+  Enqueue(&queue, uri, &proxy_res);
   printf("----------------enqueue %d\n", queue.count);
   
 
@@ -160,6 +160,7 @@ void doit(int fd)
   Node *p = queue.front;
   while (p != NULL){
     
+    printf("^^^^^^^^^^^^^^^^^^^%s\n", (p->request_line));
     if(!strcmp(p->request_line, &uri)){
       printf("--------------------cache hit!!\n");
       Rio_writen(fd, p->response, MAX_OBJECT_SIZE);

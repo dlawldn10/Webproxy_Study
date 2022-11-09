@@ -44,12 +44,13 @@ int IsEmpty(Queue *queue)
 void Enqueue(Queue *queue, char *request_line, char *response)
 {
     Node *now = (Node *)malloc(MAX_OBJECT_SIZE); //노드 생성
-    // printf("%s\n", *request_line);
-    now->request_line = &request_line;//데이터 설정
-    now->response = &response;
+    printf("################%s\n", request_line);
+    printf("################%s\n", response);
+    now->request_line = request_line;//데이터 설정
+    now->response = response;
     now->next = NULL;
 
-    // printf("%s\n", *(now->request_line));
+    printf("***************%s\n", (now->request_line));
 
     if (IsEmpty(queue))//큐가 비어있을 때
     {
