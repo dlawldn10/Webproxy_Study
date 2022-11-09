@@ -93,14 +93,14 @@ void send_request(char *uri, int fd){
 
   // request header
   Rio_readinitb(&rio, clientfd);
-  sprintf(buf, "GET %s HTTP/1.0\r\n", uri);
-  sprintf(buf, "%sConnection: keep-alive\r\n", buf);
-  sprintf(buf, "%sCache-Control: max-age=0\r\n", buf);
-  sprintf(buf, "%sUpgrade-Insecure-Requests: 1\r\n", buf);
-  sprintf(buf, "%sUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36\r\n", buf);
-  sprintf(buf, "%sAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9", buf);
-  sprintf(buf, "%sAccept-Encoding: gzip, deflate\r\n", buf);
-  sprintf(buf, "%sAccept-Language: ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7\r\n\r\n", buf);
+  sprintf(buf, "GET %s HTTP/1.0\r\n\r\n", new_uri);
+  // sprintf(buf, "%sConnection: keep-alive\r\n", buf);
+  // sprintf(buf, "%sCache-Control: max-age=0\r\n", buf);
+  // sprintf(buf, "%sUpgrade-Insecure-Requests: 1\r\n", buf);
+  // sprintf(buf, "%sUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36\r\n", buf);
+  // sprintf(buf, "%sAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9", buf);
+  // sprintf(buf, "%sAccept-Encoding: gzip, deflate\r\n", buf);
+  // sprintf(buf, "%sAccept-Language: ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7\r\n\r\n", buf);
 
   Rio_writen(clientfd, buf, strlen(buf));
   printf("%s", buf);
@@ -115,8 +115,10 @@ void send_request(char *uri, int fd){
     printf("------------------dequeue %d\n", queue.count);
   }
 
+  printf("%s\n", (proxy_res));
   Enqueue(&queue, uri, &proxy_res);
   printf("----------------enqueue %d\n", queue.count);
+  
 
 
 }
@@ -146,7 +148,11 @@ void doit(int fd)
     
     if(strcmp(cache->request_line, uri) == 0){
       printf("--------------------cache hit!!\n");
-      Rio_writen(fd, cache->response, MAX_OBJECT_SIZE);
+      // printf("%s\n", (cache->response));
+      printf("before %s\n", (cache->request_line));
+      Rio_writen(fd, cache->response, strlen(cache->response));
+      printf("after %s\n", (cache->request_line));
+      // printf("111111111111111111\n");
       return;
     }
     cache = cache->next;
